@@ -36,19 +36,25 @@ class Encoder(nn.Module):
         hidden = init_hidden(input_data, self.hidden_size)  # 1 * batch_size * hidden_size
         cell = init_hidden(input_data, self.hidden_size)
 
+        input_data = input_data.cpu()
+
         for t in range(self.T - 1):
             # Eqn. 8: concatenate the hidden states with each predictor
             x = torch.cat((hidden.repeat(self.input_size, 1, 1).permute(1, 0, 2),
                            cell.repeat(self.input_size, 1, 1).permute(1, 0, 2),
                            input_data.permute(0, 2, 1)), dim=2)  # batch_size * input_size * (2*hidden_size + T - 1)
+            x = x.cuda()
             # Eqn. 8: Get attention weights
             x = self.attn_linear(x.view(-1, self.hidden_size * 2 + self.T - 1))  # (batch_size * input_size) * 1
             # Eqn. 9: Softmax the attention weights
-            attn_weights = tf.softmax(x.view(-1, self.input_size), dim=1)  # (batch_size, input_size)
+            attn_weights = tf.softmax(x.view(-1, self.input_size), dim=1).cuda()  # (batch_size, input_size)
             # Eqn. 10: LSTM
+            input_data = input_data.cuda()
             weighted_input = torch.mul(attn_weights, input_data[:, t, :])  # (batch_size, input_size)
             # Fix the warning about non-contiguous memory
             # see https://discuss.pytorch.org/t/dataparallel-issue-with-flatten-parameter/8282
+            hidden = hidden.cuda()
+            cell = cell.cuda()
             self.lstm_layer.flatten_parameters()
             _, lstm_states = self.lstm_layer(weighted_input.unsqueeze(0), (hidden, cell))
             hidden = lstm_states[0]
@@ -92,6 +98,7 @@ class Decoder(nn.Module):
             x = torch.cat((hidden.repeat(self.T - 1, 1, 1).permute(1, 0, 2),
                            cell.repeat(self.T - 1, 1, 1).permute(1, 0, 2),
                            input_encoded), dim=2)
+            x = x.cuda()
             # Eqn. 12 & 13: softmax on the computed attention weights
             x = tf.softmax(
                     self.attn_layer(
@@ -99,6 +106,7 @@ class Decoder(nn.Module):
                     ).view(-1, self.T - 1),
                     dim=1)  # (batch_size, T - 1)
 
+            input_encoded = input_encoded.cuda()
             # Eqn. 14: compute context vector
             context = torch.bmm(x.unsqueeze(1), input_encoded)[:, 0, :]  # (batch_size, encoder_hidden_size)
 
@@ -106,6 +114,8 @@ class Decoder(nn.Module):
             y_tilde = self.fc(torch.cat((context, y_history[:, t]), dim=1))  # (batch_size, out_size)
             # Eqn. 16: LSTM
             self.lstm_layer.flatten_parameters()
+            hidden = hidden.cuda()
+            cell = hidden.cuda()
             _, lstm_output = self.lstm_layer(y_tilde.unsqueeze(0), (hidden, cell))
             hidden = lstm_output[0]  # 1 * batch_size * decoder_hidden_size
             cell = lstm_output[1]  # 1 * batch_size * decoder_hidden_size

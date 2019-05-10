@@ -28,6 +28,8 @@ def preprocess_data(dat, col_names) -> Tuple[TrainData, StandardScaler]:
     proc_dat = scale.transform(dat)
 
     mask = np.ones(proc_dat.shape[1], dtype=bool)
+    print(mask.shape)
+    exit()
     dat_cols = list(dat.columns)
     for col_name in col_names:
         mask[dat_cols.index(col_name)] = False

@@ -28,8 +28,6 @@ def preprocess_data(dat, col_names) -> Tuple[TrainData, StandardScaler]:
     proc_dat = scale.transform(dat)
 
     mask = np.ones(proc_dat.shape[1], dtype=bool)
-    print(mask.shape)
-    exit()
     dat_cols = list(dat.columns)
     for col_name in col_names:
         mask[dat_cols.index(col_name)] = False
@@ -77,7 +75,11 @@ def train(net: DaRnnNet, train_data: TrainData, t_cfg: TrainConfig, n_epochs=10,
     n_iter = 0
 
     for e_i in range(n_epochs):
+        print(t_cfg.train_size)
         perm_idx = np.random.permutation(t_cfg.train_size - t_cfg.T)
+        print(perm_idx.shape)
+        print(perm_idx[1:5])
+        exit()
 
         for t_i in range(0, t_cfg.train_size, t_cfg.batch_size):
             batch_idx = perm_idx[t_i:(t_i + t_cfg.batch_size)]
